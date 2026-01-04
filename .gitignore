@@ -1,6 +1,8 @@
 .gitignore content:
 __MACOSX/
 ccbs_zhongjie/
+# 允许训练好的模型zip文件
+!continuous_CBS/ppo_*.zip
 *.zip
 *.tar
 *.tar.gz
