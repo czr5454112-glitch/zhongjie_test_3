@@ -1,0 +1,174 @@
+GIT_USAGE_GUIDE.txt content:
++============================================================
++Git 使用手册（项目：code_continuous_CBS）
++作者：Zack611
++最后更新：2025-11-13
++============================================================
++
++一、今天已经完成的配置与操作
++------------------------------------------------------------
++1. 在项目根目录初始化了 Git 仓库
++   - 命令：git init
++   - 位置：C:\PROGRAMING\ccbs_zhongjie\code_continuous_CBS
++
++2. 配置了全局提交身份
++   - 用户名：Zack611
++   - 邮箱：czr5454112@outlook.com
++   - 命令：
++     git config --global user.name "Zack611"
++     git config --global user.email "czr5454112@outlook.com"
++
++3. 创建并提交了首个 .gitignore
++   - 忽略虚拟环境、压缩包、临时文件等
++
++4. 完成首次提交（commit）
++   - 提交信息：Initial commit
++   - 包含内容：项目全部当前文件（代码、实例、预训练模型等）
++
++
++二、常用 Git 命令速览
++------------------------------------------------------------
++1. 查看当前状态
++   git status
++   或简洁模式：git status -sb
++
++2. 查看已有提交记录
++   git log --oneline
++   查看最近 N 条：git log -n 5 --stat
++
++3. 比较修改内容
++   查看未暂存变更：git diff
++   查看已暂存变更：git diff --cached
++   比较任意两个提交：git diff <commit1> <commit2>
++
++4. 暂存文件（准备提交）
++   暂存单个文件：git add 路径/文件名
++   暂存所有修改：git add .
++
++5. 提交修改
++   git commit -m "提交说明"
++
++6. 撤销尚未提交的工作
++   撤销某个文件的修改：git checkout -- 路径/文件名
++   撤销暂存（保留修改）：git reset HEAD 路径/文件名
++   （注意：不要在已有提交中回滚别人工作，除非确定后果）
++
++7. 查看与切换分支
++   查看分支：git branch
++   创建并切换新分支：git checkout -b feature/名字
++   切换到已有分支：git checkout 分支名
++
++8. 合并分支（简单流程）
++   在主分支执行：git merge feature/名字
++   若出现冲突，手动修改冲突文件后：
++     git add 冲突文件
++     git commit
++
++9. 设置与使用远程仓库
++   添加远程：git remote add origin https://...
++   查看远程：git remote -v
++   首次推送：git push -u origin master
++   后续推送：git push
++   获取远程更新：git pull 或 git fetch + git merge
++
++10. 标签（可选）
++    创建标签：git tag v1.0.0
++    推送标签：git push origin v1.0.0
++
++
++三、推荐的日常工作流程
++------------------------------------------------------------
++1. 确认当前分支（通常 master/main 是基线）
++   git status
++
++2. 若要新增功能 / 修改：
++   git checkout -b feature/简要描述
++
++3. 进行代码修改、测试
++
++4. 查看状态和差异
++   git status
++   git diff
++
++5. 分阶段提交
++   git add 指定文件
++   git commit -m "清晰的提交说明"
++
++6. 回到主分支合并（本地完成后再推送）
++   git checkout master
++   git merge feature/简要描述
++
++7. 推送到远程仓库（若已设置 origin）
++   git push
++
++8. 定期查看日志，确保历史清晰
++   git log --oneline --graph --decorate
++
++
++四、常见问题与建议
++------------------------------------------------------------
++1. 行结尾提示（LF will be replaced by CRLF）
++   - Windows 环境常见提示，不必担心。
++   - 若要统一行为，可设置：git config core.autocrlf true
++
++2. 忘记配置用户名/邮箱
++   - 即使在提交后发现，也可使用：
++     git commit --amend --reset-author
++
++3. 提交前忘记测试或检查
++   - 建议形成习惯：提交前先运行项目必要的测试/验证。
++
++4. 提交信息最佳实践
++   - 第一行简洁说明本次改动
++   - 如需详细解释，可在空行后继续编写多行描述
++
++5. 忽略更多文件
++   - 编辑 .gitignore 后，需要重新运行：git add .gitignore
++     然后 commit，未来这些文件将不会被纳入版本控制。
++
++6. 误删文件或想找回旧版本
++   - 使用 git log 查找到对应提交
++   - 使用 git checkout <commit> -- 文件路径 取回旧版本
++
++7. 备份和协作
++   - 建议创建远程仓库（GitHub、Gitee 等）备份代码
++   - 与他人协作时可使用 Pull Request 工作流
++
++
++五、Git Bash 与 Git CMD 对比
++------------------------------------------------------------
++1. 核心差别
++   - Git Bash：基于 Bash shell，附带 ls、pwd、ssh 等类 Unix 工具，适合执行 `bash` 脚本和习惯 Linux 命令的用户。
++   - Git CMD：基于 Windows 自带的 cmd.exe，界面和快捷键与传统 CMD 完全一致，适合熟悉 Windows 命令的用户。
++
++2. Git 命令是否不同？
++   - 两者执行 `git status`、`git commit`、`git push` 等 Git 子命令完全一致。
++   - 差异只在于外层环境：在 Git Bash 中你可以用 `ls`、`pwd`，在 Git CMD 中对应命令是 `dir`、`cd`。
++
++3. 复制/粘贴操作
++   - Git Bash：默认使用鼠标选中→Enter 复制，Shift+Insert 粘贴；可在窗口右键 → Options → Keys 启用 Ctrl+Shift+C/V。
++   - Git CMD：与普通 CMD 相同，可以直接使用 Ctrl+C / Ctrl+V（如果模式为 QuickEdit），也可通过右键菜单操作。
++
++4. 路径写法
++   - Git Bash：以 `/c/路径/...` 形式表示 Windows 盘符，可使用正斜杠 `/`。
++   - Git CMD：沿用 Windows 风格，比如 `C:\路径\...`。
++
++5. 何时选择哪一个？
++   - 需要运行工程里提供的 .sh / Bash 脚本、习惯 Linux 命令、要用 ssh 等工具 → 使用 Git Bash。
++   - 只做最基本的 Git 操作、偏好 Windows 命令行 → 使用 Git CMD；也可配合 PowerShell。
++
++6. 混合使用的小窍门
++   - 同一仓库随时可在两个终端之间切换，Git 提交历史共享。
++   - 若命令写法不确定，可把教程里的 Bash 命令复制到 Git Bash 执行；需要 Windows 风格时再打开 Git CMD。
++
++六、后续提升方向
++------------------------------------------------------------
++1. 使用 Git 分支命名约定（feature/、bugfix/、hotfix/ 等）
++2. 将 `git status`、`git diff` 作为每次提交前检查的必备步骤
++3. 学习 rebase（git rebase）以保持历史记录整洁（需要谨慎操作）
++4. 引入 GUI 工具（如 GitHub Desktop、Sourcetree）辅助查看历史和冲突
++5. 若项目持续增长，可编写 CONTRIBUTING.md 和提交规范
++
++============================================================
++使用过程中如有问题，可记录在此文档末尾以便持续更新。
++============================================================
