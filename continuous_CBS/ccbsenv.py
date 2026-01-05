@@ -35,13 +35,14 @@ class CCBSEnv(gym.Env):
         self.alg = CCBS(map)
         self.max_process_agent = 100
         self.max_step = 1024
-        self.reward_1 = 10  # 当前节点满足约束且无其它冲突
+        self.reward_1 = 15  # 当前节点满足约束且无其它冲突（从10提高到15）
         self.reward_2 = 2  # 分支数量权重系数
         self.reward_3 = -5  # 当前节点不满足约束
-        self.cardinal_conflicts_weight = 1  # cardinal_conflict权重
-        self.semicard_conflicts_weight = 1  # semicard_conflict权重
-        self.non_cardinal_conflict_weight = 1  # non_cardinal冲突数量权重
-        self.reward_iter_pos = -0.5
+        self.cardinal_conflicts_weight = 2  # cardinal_conflict权重（从1提高到2）
+        self.semicard_conflicts_weight = 1.5  # semicard_conflict权重（从1提高到1.5）
+        self.non_cardinal_conflict_weight = 1.2  # non_cardinal冲突数量权重（从1提高到1.2）
+        self.reward_iter_pos = -0.2  # 每次迭代惩罚（从-0.5降低到-0.2）
+        self.reward_fail = -15  # episode失败惩罚（未找到解时的惩罚）
         self.cost_weight = 0.01  # 目标函数权重
         self.high_level_generated = 1
         self.cur_id = 2
@@ -63,7 +64,99 @@ class CCBSEnv(gym.Env):
 
     def reset(self, seed=None, **kwargs):
         super().reset(seed=seed, **kwargs)
-        # 重置环境
+        
+        # 如果环境有_map_path和_train_task_dir属性，说明需要重新选择任务
+        if hasattr(self, '_map_path') and hasattr(self, '_train_task_dir') and hasattr(self, '_ccbs_config'):
+            # 重新选择任务（实现跨任务训练）
+            import random
+            import os
+            from structs import Task, Solution
+            
+            max_retries = 10
+            for retry in range(max_retries):
+                try:
+                    # 重新扫描任务文件目录（确保每次reset都能获取最新任务列表）
+                    if not os.path.exists(self._train_task_dir):
+                        raise ValueError(f"训练任务目录不存在: {self._train_task_dir}")
+                    
+                    training_files = [
+                        os.path.join(self._train_task_dir, fname)
+                        for fname in os.listdir(self._train_task_dir)
+                        if fname.endswith('.xml') and fname != ".DS_Store"
+                    ]
+                    
+                    if len(training_files) == 0:
+                        raise ValueError(f"训练任务目录中没有可用的任务文件: {self._train_task_dir}")
+                    
+                    # 随机选择一个任务文件
+                    task_file = random.choice(training_files)
+                    
+                    # 重用地图对象（如果已存在）
+                    if hasattr(self, '_world_map') and self._world_map is not None:
+                        world_map = self._world_map
+                    else:
+                        from map import Map
+                        world_map = Map(self._map_path)
+                        self._world_map = world_map
+                    
+                    # 创建新的CCBS对象
+                    from ccbs import CCBS
+                    ccbs = CCBS(world_map)
+                    
+                    # 应用配置
+                    ccbs.config.agent_size = self._ccbs_config["agent_size"]
+                    ccbs.config.hlh_type = self._ccbs_config["hlh_type"]
+                    ccbs.config.precision = self._ccbs_config["precision"]
+                    ccbs.config.timelimit = self._ccbs_config["timelimit"]
+                    ccbs.config.use_precalculated_heuristic = self._ccbs_config["use_precalculated_heuristic"]
+                    ccbs.config.use_disjoint_splitting = self._ccbs_config["use_disjoint_splitting"]
+                    ccbs.config.use_cardinal = self._ccbs_config["use_cardinal"]
+                    ccbs.config.use_corridor_symmetry = self._ccbs_config["use_corridor_symmetry"]
+                    ccbs.config.use_target_symmetry = self._ccbs_config["use_target_symmetry"]
+                    ccbs.config.use_rl = self._ccbs_config["use_rl"]
+                    ccbs.verbose = self._ccbs_config["verbose"]
+                    
+                    # 加载任务
+                    task = Task()
+                    task.load_from_file(task_file)
+                    
+                    if self._ccbs_config["use_precalculated_heuristic"]:
+                        ccbs.map.init_heuristic(task.agents)
+                    
+                    ccbs.solution = Solution()
+                    
+                    # 初始化根节点
+                    if not ccbs.init_root(task):
+                        if retry < max_retries - 1:
+                            continue
+                        raise ValueError(f"无法找到根节点解: {os.path.basename(task_file)}")
+                    
+                    if len(ccbs.tree.container) == 0:
+                        if retry < max_retries - 1:
+                            continue
+                        raise ValueError(f"无解: {os.path.basename(task_file)}")
+                    
+                    parent = ccbs.tree.get_front()
+                    if parent.conflicts_num == 0:
+                        if retry < max_retries - 1:
+                            continue
+                        raise ValueError(f"根节点无冲突: {os.path.basename(task_file)}")
+                    
+                    # 更新环境状态
+                    self.task = task
+                    self.ini_node = parent
+                    self.node = parent
+                    self.alg = ccbs
+                    self.tree = ccbs.tree
+                    self.planner = ccbs.planner
+                    break
+                    
+                except Exception as e:
+                    if retry == max_retries - 1:
+                        raise RuntimeError(f"reset时重新选择任务失败: {e}")
+                    continue
+        
+        # 重置环境状态
         self.done = False
         self.reward = 0
         self.current_step = 1
@@ -75,6 +168,8 @@ class CCBSEnv(gym.Env):
         self.cur_id = 2
         self.final_res = None
         self.node = self.ini_node
+        self.lb = 0
+        self.ub = float('inf')
         paths = self.alg.get_paths(self.node, len(self.task.agents))
 
         self.state = {
@@ -90,6 +185,18 @@ class CCBSEnv(gym.Env):
         return self.state, info
 
     def step(self, action):
+        # 修复action处理：确保action是标量
+        # action通常是np.ndarray(shape=(1,))，需要转换为标量
+        if isinstance(action, np.ndarray):
+            action_value = float(action[0])
+        elif isinstance(action, (list, tuple)):
+            action_value = float(action[0])
+        else:
+            action_value = float(action)
+        
+        # 确保action_value在[0, 1]范围内
+        action_value = np.clip(action_value, 0.0, 1.0)
+        
         node = self.node.create_node_move_conflicts()
         paths = self.alg.get_paths(node, len(self.task.agents))
 
@@ -101,6 +208,8 @@ class CCBSEnv(gym.Env):
         elif self.current_step >= self.max_step or (len(self.tree.container) == 0 and self.current_step > 1):
             print('No Solution')
             self.done = True
+            # 添加失败惩罚
+            self.reward += self.reward_fail
 
         else:
             node.cost -= node.h
@@ -109,10 +218,14 @@ class CCBSEnv(gym.Env):
             print(f"current all conflicts: {all_conflicts}")
 
             conflict_index = 0
-            if action == 1:
-                conflict_index = -1
+            if len(all_conflicts) == 0:
+                conflict_index = 0
+            elif action_value >= 1.0 or action_value == 1.0:
+                conflict_index = -1  # 选择最后一个冲突
             else:
-                conflict_index = int(np.ceil(len(all_conflicts) * action)) - 1
+                conflict_index = int(np.ceil(len(all_conflicts) * action_value)) - 1
+                conflict_index = max(0, min(conflict_index, len(all_conflicts) - 1))  # 确保索引有效
+            
             conflict = all_conflicts[conflict_index]
             print(f"selected conflict is {conflict}")
 
@@ -249,6 +362,9 @@ class CCBSEnv(gym.Env):
                 self.state['cur_depth'] = np.array([self.current_step]).astype(np.int32)
             else:
                 self.done = True
+                # 如果树为空且未找到解，添加失败惩罚
+                if self.final_res is None:
+                    self.reward += self.reward_fail
 
         truncated = False
         info = {}
