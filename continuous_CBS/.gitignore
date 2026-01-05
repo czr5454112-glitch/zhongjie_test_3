@@ -24,6 +24,9 @@ tensorboard/
 *.txt
 !README.md
 !LICENSE
+test_evaluation_log.txt
+training_console.log
+training_log_*.txt
 
 # 环境
 venv/
